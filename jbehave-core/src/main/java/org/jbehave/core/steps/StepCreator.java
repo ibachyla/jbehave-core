@@ -427,11 +427,10 @@ public class StepCreator {
             }
 
             if (!delimitedNames.isEmpty()) {
-                parameter = replaceAllDelimitedNames(delimitedNames, position, annotated, parameter, namedParameters);
-                delimitedNames = delimitedNameFor(parameter);
-                if (!delimitedNames.isEmpty()) {
-                    parameter = replaceAllDelimitedNames(delimitedNames, position, annotated, parameter,
-                            namedParameters);
+                for(String delimitedName : delimitedNames) {
+                    monitorUsingTableNameForParameter(delimitedName, position, annotated);
+                    parameter = parameterControls.replaceAllDelimitedNames(parameter, delimitedName,
+                            namedParameter(namedParameters, delimitedName));
                 }
             }
             else if (parameter == null && isTableName(namedParameters, name)) {
@@ -467,18 +466,7 @@ public class StepCreator {
 
         return parameter;
     }
-
-    private String replaceAllDelimitedNames(List<String> delimitedNames, int position, boolean annotated,
-                                            String parameter, Map<String, String> namedParameters) {
-        String parameterWithDelimitedNames = parameter;
-        for(String delimitedName : delimitedNames) {
-            monitorUsingTableNameForParameter(delimitedName, position, annotated);
-            parameterWithDelimitedNames = parameterControls.replaceAllDelimitedNames(parameterWithDelimitedNames,
-                    delimitedName, namedParameter(namedParameters, delimitedName));
-        }
-        return parameterWithDelimitedNames;
-    }
-
+    
     private int numberOfPreviousFromContext(ParameterName[] names, int currentPosition) {
         int number = 0;
         
