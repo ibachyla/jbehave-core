@@ -70,7 +70,7 @@ public class ExamplesTableBehaviour {
         String valueSeparator = "|";
         String tableWithCustomSeparator = wikiTableAsString;
         ExamplesTable table = new ExamplesTable(tableWithCustomSeparator, headerSeparator, valueSeparator,
-                new ParameterControls());
+                new ParameterControls(), new TableTransformers());
         assertThat(table.getHeaderSeparator(), equalTo(headerSeparator));
         assertThat(table.getValueSeparator(), equalTo(valueSeparator));
         ensureColumnOrderIsPreserved(table);
@@ -83,7 +83,7 @@ public class ExamplesTableBehaviour {
         String valueSeparator = "!";
         String tableWithCustomSeparator = wikiTableAsString.replace("|", "!");
         ExamplesTable table = new ExamplesTable(tableWithCustomSeparator, headerSeparator, valueSeparator,
-                new ParameterControls());
+                new ParameterControls(), new TableTransformers());
         assertThat(table.getHeaderSeparator(), equalTo(headerSeparator));
         assertThat(table.getValueSeparator(), equalTo(valueSeparator));
         ensureColumnOrderIsPreserved(table);
@@ -214,7 +214,8 @@ public class ExamplesTableBehaviour {
         TableTransformers tableTransformers = new TableTransformers();
         tableTransformers.useTransformer("myTransformer", new TableTransformer() {
 
-            public String transform(String tableAsString, Properties properties) {
+            @Override
+            public String transform(String tableAsString, ExamplesTableProperties properties) {
                 return tableWithSpacesAsString;
             }
 
@@ -267,7 +268,7 @@ public class ExamplesTableBehaviour {
         ParameterConverters parameterConverters = new ParameterConverters();
         parameterConverters.addConverters(new MethodReturningConverter(methodFor("convertDate"), this));
         ExamplesTableFactory factory = new ExamplesTableFactory(new LocalizedKeywords(), newResourceLoader(),
-                parameterConverters, new ParameterControls());
+                parameterConverters, new ParameterControls(), new TableTransformers());
 
         // When
         String tableAsString = "|one|two|\n|11|22|\n|1/1/2010|2/2/2010|";
@@ -288,7 +289,7 @@ public class ExamplesTableBehaviour {
         ParameterConverters parameterConverters = new ParameterConverters();
         parameterConverters.addConverters(new MethodReturningConverter(methodFor("convertDate"), this));
         ExamplesTableFactory factory = new ExamplesTableFactory(new LocalizedKeywords(), newResourceLoader(),
-                parameterConverters, new ParameterControls());
+                parameterConverters, new ParameterControls(), new TableTransformers());
 
         // When
         String tableDefaultsAsString = "|three|\n|99|";
@@ -555,14 +556,12 @@ public class ExamplesTableBehaviour {
         assertTableAsString("|a|b|\n|a|b|c|\n", "|a|b|\n|a|b|\n");
     }
 
-    private ExamplesTableFactory newExamplesTableFactory()
-    {
+    private ExamplesTableFactory newExamplesTableFactory() {
         return new ExamplesTableFactory(new LocalizedKeywords(), newResourceLoader(), new ParameterConverters(),
-                new ParameterControls());
+                new ParameterControls(), new TableTransformers());
     }
 
-    private ResourceLoader newResourceLoader()
-    {
+    private ResourceLoader newResourceLoader() {
         return new LoadFromClasspath();
     }
 

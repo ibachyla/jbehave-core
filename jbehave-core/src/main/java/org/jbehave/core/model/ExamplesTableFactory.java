@@ -36,11 +36,6 @@ public class ExamplesTableFactory {
     private final TableTransformers tableTransformers;
 
     public ExamplesTableFactory(Keywords keywords, ResourceLoader resourceLoader,
-            ParameterConverters parameterConverters, ParameterControls parameterControls) {
-        this(keywords, resourceLoader, parameterConverters, parameterControls, new TableTransformers());
-    }
-
-    public ExamplesTableFactory(Keywords keywords, ResourceLoader resourceLoader,
             ParameterConverters parameterConverters, ParameterControls parameterControls,
             TableTransformers tableTransformers) {
         this.keywords = keywords;
@@ -63,6 +58,7 @@ public class ExamplesTableFactory {
     }
 
     protected boolean isTable(String input) {
-        return input.contains(keywords.examplesTableHeaderSeparator());
+        return input.trim().startsWith(keywords.examplesTableHeaderSeparator())
+                || ExamplesTable.INLINED_PROPERTIES_PATTERN.matcher(input).matches();
     }
 }
