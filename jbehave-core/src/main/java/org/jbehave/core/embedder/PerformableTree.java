@@ -30,8 +30,10 @@ import org.jbehave.core.model.Scenario;
 import org.jbehave.core.model.Story;
 import org.jbehave.core.model.StoryDuration;
 import org.jbehave.core.reporters.ConcurrentStoryReporter;
+import org.jbehave.core.reporters.DelegatingStoryReporter;
 import org.jbehave.core.reporters.StoryReporter;
 import org.jbehave.core.steps.CandidateSteps;
+import org.jbehave.core.steps.ParameterConverters;
 import org.jbehave.core.steps.context.StepsContext;
 import org.jbehave.core.steps.InjectableStepsFactory;
 import org.jbehave.core.steps.PendingStepMethodGenerator;
@@ -91,7 +93,7 @@ public class PerformableTree {
             // Add Given stories only if story contains scenarios
             if (!performableStory.getScenarios().isEmpty()) {
                 performableStory.addGivenStories(performableGivenStories(context, story.getGivenStories(),
-                        storyParameters));
+                        storyParameters, story.getMeta()));
             }
 
             performableStory.addAfterSteps(context.beforeOrAfterStorySteps(story, Stage.AFTER));
@@ -116,12 +118,6 @@ public class PerformableTree {
 
         // determine if before and after scenario steps should be run
         boolean runBeforeAndAfterScenarioSteps = shouldRunBeforeOrAfterScenarioSteps(context);
-        for (Map<String, String> storyExamplesTableRow : storyExamplesTableRows) {
-            for (Map.Entry<String, String> entry : storyExamplesTableRow.entrySet()) {
-                entry.setValue((String)
-                        context.configuration().parameterConverters().convert(entry.getValue(), String.class, story));
-            }
-        }
         for (Map<String, String> storyExamplesTableRow : storyExamplesTableRows) {
             for (Scenario scenario : story.getScenarios()) {
                 Map<String, String> scenarioParameters = new HashMap<String, String>(storyParameters);
@@ -155,12 +151,7 @@ public class PerformableTree {
             if (isParameterisedByExamples(scenario)) {
                 ExamplesTable table = scenario.getExamplesTable();
                 for (Map<String, String> scenarioParameters : table.getRows()) {
-                    Map<String, String> scenarioParametersCopy = new HashMap<String, String>(scenarioParameters);
-                    for (Map.Entry<String, String> entry : scenarioParametersCopy.entrySet()) {
-                        entry.setValue((String) context.configuration().parameterConverters().convert(entry.getValue(),
-                                String.class, story));
-                    }
-                    Map<String, String> parameters = new LinkedHashMap<String, String>(scenarioParametersCopy);
+                    Map<String, String> parameters = new LinkedHashMap<String, String>(scenarioParameters);
                     for(Map.Entry<String, String> storyExamplesTableRowEntry: storyExamplesTableRow.entrySet()) {
                         String key = storyExamplesTableRowEntry.getKey();
                         if(!parameters.containsKey(key)) {
@@ -247,21 +238,24 @@ public class PerformableTree {
 		performableScenario.addBeforeSteps(context.lifecycleSteps(lifecycle, storyAndScenarioMeta, Stage.BEFORE));
 		addMetaParameters(parameters, storyAndScenarioMeta);
 		performableScenario.addGivenStories(performableGivenStories(context, scenario.getGivenStories(),
-		        parameters));
+		        parameters, storyAndScenarioMeta));
 		performableScenario.addSteps(context.scenarioSteps(scenario, parameters));
 		performableScenario.addAfterSteps(context.lifecycleSteps(lifecycle, storyAndScenarioMeta, Stage.AFTER));
 		performableScenario.addAfterSteps(context.beforeOrAfterScenarioSteps(storyAndScenarioMeta, Stage.AFTER,
                 ScenarioType.ANY));
 	}
 
-    private List<PerformableStory> performableGivenStories(RunContext context, GivenStories givenStories,
-            Map<String, String> parameters) {
+    private List<PerformableStory> performableGivenStories(RunContext context, GivenStories givenStories, Map<String,
+            String> parameters, Meta meta) {
         List<PerformableStory> stories = new ArrayList<PerformableStory>();
         if (givenStories.getPaths().size() > 0) {
             for (GivenStory givenStory : givenStories.getStories()) {
                 RunContext childContext = context.childContextFor(givenStory);
                 // run given story, using any parameters provided
-                Story story = storyOfPath(context.configuration(), childContext.path());                
+                Story story = storyOfPath(context.configuration(), childContext.path());
+                if (!meta.isEmpty()) {
+                    story = createNewStory(story, story.getMeta().inheritFrom(meta), story.getScenarios());
+                }
                 if ( givenStory.hasAnchorParameters() ){
                     story = storyWithMatchingScenarios(story, givenStory.getAnchorParameters());
                 }
@@ -280,7 +274,12 @@ public class PerformableTree {
                 scenarios.add(scenario);
             }
         }
-        return new Story(story.getPath(), story.getDescription(), story.getMeta(), story.getNarrative(), scenarios); 
+        return createNewStory(story, story.getMeta(), scenarios);
+    }
+
+    private Story createNewStory(Story baseStory, Meta newMeta, List<Scenario> newScenarios) {
+        return new Story(baseStory.getPath(), baseStory.getDescription(), newMeta, baseStory.getNarrative(),
+                baseStory.getGivenStories(), baseStory.getLifecycle(), newScenarios);
     }
 
     private boolean matchesParameters(Scenario scenario, Map<String, String> parameters) {
@@ -427,8 +426,8 @@ public class PerformableTree {
             }
 	        throw new UUIDExceptionWrapper(e);
         } finally {
-            if (!context.givenStory() && context.reporter() instanceof ConcurrentStoryReporter && !restartingStory ) {
-                ((ConcurrentStoryReporter) context.reporter()).invokeDelayed();
+            if (!context.givenStory() && !restartingStory) {
+                invokeDelayedReporters(context.reporter());
             }
         }
     }
@@ -458,11 +457,20 @@ public class PerformableTree {
         } catch (InterruptedException e) {
             throw new UUIDExceptionWrapper(e);
         } finally {
-            if (context.reporter() instanceof ConcurrentStoryReporter) {
-                ((ConcurrentStoryReporter) context.reporter()).invokeDelayed();
-            }
+            invokeDelayedReporters(context.reporter());
         }
         context.reporter().afterStory(false);
+        invokeDelayedReporters(context.reporter());
+    }
+
+    private void invokeDelayedReporters(StoryReporter reporter) {
+        if (reporter instanceof ConcurrentStoryReporter) {
+            ((ConcurrentStoryReporter) reporter).invokeDelayed();
+        } else if (reporter instanceof DelegatingStoryReporter) {
+            for (StoryReporter delegate : ((DelegatingStoryReporter) reporter).getDelegates()) {
+                invokeDelayedReporters(delegate);
+            }
+        }
     }
 
     @Override
@@ -843,7 +851,17 @@ public class PerformableTree {
 
         private void performScenarios(RunContext context) throws InterruptedException {
             for (PerformableScenario scenario : scenarios) {
+                convertParameters(context.configuration().parameterConverters(), scenario.getExamples());
                 scenario.perform(context);
+            }
+        }
+
+        private void convertParameters(ParameterConverters parameterConverters, List<ExamplePerformableScenario>
+                examplePerformableScenarios) {
+            for (ExamplePerformableScenario examplePerformableScenario : examplePerformableScenarios) {
+                for (Map.Entry<String, String> entry : examplePerformableScenario.getParameters().entrySet()) {
+                    entry.setValue((String) parameterConverters.convert(entry.getValue(), String.class, story));
+                }
             }
         }
 
