@@ -30,8 +30,18 @@ public class MetaFilterBehaviour {
         MetaMatcher metaMatcher = filter.metaMatcher();
         assertThat(metaMatcher, Matchers.instanceOf(DefaultMetaMatcher.class));
         DefaultMetaMatcher defaultMetaMatcher = (DefaultMetaMatcher)metaMatcher;
-        assertThat(defaultMetaMatcher.include().toString(), equalTo("{defect-4321=, author=Mauro, map=*API}"));
-        assertThat(defaultMetaMatcher.exclude().toString(), equalTo("{defect-1234=, skip=, theme=smoke testing}"));
+
+        Properties expectedInclude = new Properties();
+        expectedInclude.setProperty("defect-4321", "");
+        expectedInclude.setProperty("author", "Mauro");
+        expectedInclude.setProperty("map", "*API");
+        assertThat(defaultMetaMatcher.include(), equalTo(expectedInclude));
+
+        Properties expectedExclude = new Properties();
+        expectedExclude.setProperty("defect-1234", "");
+        expectedExclude.setProperty("skip", "");
+        expectedExclude.setProperty("theme", "smoke testing");
+        assertThat(defaultMetaMatcher.exclude(), equalTo(expectedExclude));
     }
 
     @Test
